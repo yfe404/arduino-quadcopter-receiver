@@ -1,20 +1,29 @@
 #include <SPI.h>
+#include <nRF24L01.h>
 #include <RF24.h> //Library: TMRh20/RF24, https://github.com/tmrh20/RF24/
-#include <Servo.h>
 #include "printf.h"
+#include "PPMEncoder.h"
+
+////////////////////// PPM CONFIGURATION//////////////////////////
+#define OUTPUT_PIN 5
+//////////////////////////////////////////////////////////////////
+
 
 RF24 radio(3, 2);   // nRF24L01 (CE, CSN)
 const byte address[6] = "00001";
 unsigned long lastReceiveTime = 0;
 unsigned long currentTime = 0;
 
+
+
+
 // Max size of this struct is 32 bytes - NRF24L01 buffer limit
 struct Data_Package {
-  byte j1PotX;
-  byte j1PotY;
+  byte yaw;
+  byte gaz;
   byte j1Button;
-  byte j2PotX;
-  byte j2PotY;
+  byte roll;
+  byte pitch;
   byte j2Button;
   byte pot1;
   byte pot2;
@@ -26,10 +35,15 @@ struct Data_Package {
   byte button4;
 };
 
-int gaz, yaw, pitch, roll;
+
 
 Data_Package data; //Create a variable with the above structure
 void setup() {
+
+	resetData();
+  ppmEncoder.begin(OUTPUT_PIN);
+
+  
   Serial.begin(115200);
   while (!Serial) {
     // some boards need to wait to ensure access to serial over USB
@@ -61,21 +75,32 @@ void loop() {
     lastReceiveTime = millis(); // At this moment we have received the data
   }
 
-	gaz = map(data.j1PotY, 0, 255, 0, 1000); // Map the receiving value from 0 to 255 to 0 to 1000
-  yaw = map(data.j1PotX, 0, 255, 0, 1000); 
-	pitch = map(data.j2PotY, 0, 255, 0, 1000);
-	roll = map(data.j2PotX, 0, 255, 0, 1000); 
 
-  Serial.println("Gaz: \d; Yaw: \d; Pitch: \d; Roll: \d", gaz, yaw, pitch, roll);
-  
+	setPPMValuesFromData();
+
+}
+
+
+void setPPMValuesFromData()
+{
+  ppmEncoder.setChannel(0, map(data.gaz, 0, 255, 1000, 2000));
+  ppmEncoder.setChannel(1, map(data.roll, 0, 255, 1000, 2000));
+  ppmEncoder.setChannel(2, map(data.pitch, 0, 255, 1000, 2000));
+  ppmEncoder.setChannel(3, map(data.yaw, 0, 255, 1000, 2000));
+  ppmEncoder.setChannel(4, map(data.pot1, 0, 255, 1000, 2000));
+  ppmEncoder.setChannel(5, map(data.pot2, 0, 255, 1000, 2000));
+  ppmEncoder.setChannel(6, PPMEncoder::MIN);
+  ppmEncoder.setChannel(7, PPMEncoder::MIN);
+
+ 
 }
 
 void resetData() {
   // Reset the values when there is no radio connection - Set initial default values
-  data.j1PotX = 127;
-  data.j1PotY = 127;
-  data.j2PotX = 127;
-  data.j2PotY = 127;
+  data.yaw = 127;
+  data.gaz = 0; // beware the drone will fall down!
+  data.roll = 127;
+  data.pitch = 127;
   data.j1Button = 1;
   data.j2Button = 1;
   data.pot1 = 1;
@@ -86,4 +111,6 @@ void resetData() {
   data.button2 = 1;
   data.button3 = 1;
   data.button4 = 1;
+
+	setPPMValuesFromData();
 }
